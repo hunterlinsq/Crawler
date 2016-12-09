@@ -1,0 +1,189 @@
+---
+title: "爬虫入门(一)"
+author: "林双全"
+date: "2016年12月8日"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+    includes:
+          in_header: header.tex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+本文为本人在学习曾武雄学长(firebear)的presentation时做的笔记。
+
+#基础知识              
+学习爬虫前所需要的基础知识：
+
+ + URL:(uniform resource locator),也就是所谓的网址,通常由三部分构成：模式或协议、服务器或IP地址、路径和文件名 
+ 
+ + HTTP：也就是超文本传输协议，是目前互联网上应用最为广泛的一种网络协议。HTTP是基于请求响应模式，客户端向服务器发送一个请求，服务器则已一个状态作为响应，响应的内容通常为网页源码。HTTP定义了操作资源的八种不同方法，其中最基本的4种：GET,POST,PUT,DELETE,分别对应查询、修改、增加、删减4个操作。
+ 
+ + HTML：超文本标记语言，是一种建立在网页文件的语言，通过标记式的指令(Tag),将影像、图片、文件等信息显示出来。HTML语言使用标记对的方法编写文件，通常使用“<标志名>内容</标志名>”来表示标志的开始和结束。            
+       - \<html>...\</html>:网页的开始和结束            
+       - \<body>...\</body>:网页的主体部分              
+       - \<p>...\</p>:创建一个段落              
+       - \<br>...\</br>:创建一个回车换行                
+       - \<div>...\</div>:用于排版大块的HTML段落                
+       - \<h1>\</h1>...\<h6>\</h6>:不同层级的标题         
+       - \<a name="...">...\</a>:创建一个新标签                   
+
+|       CSS是Cascading Style Sheets的缩写，即层叠样式表，是一种标记语言，不需要经过编译过程，可直接由浏览器执行，主要用于美化网页，如定义网页的背景颜色、字体的类型等。
+
+|       JavaScript是一种基于对象和事件驱动的客户端脚本语言，可以实现Ajax异步请求过程，实现与用户之间的交互过程等。
+
+
+ + Xpath：是一门在XML文档（节点树，其根节点也被称作文档节点）中查找信息的语言。Xpath将节点树种的节点分为七类：元素、属性、文本、命名空间、处理指令、注释和文档节点。Xpath使用路径表达式来选取XML文档中的节点或者节点集。简单来说，就是利用Xpath从网页中提取出目标数据。
+
+ + Cookie：是指网站为了辨别用户身份、进行session跟踪而存储在用户本地终端上的数据。Cookie由服务器端生成，并发送给浏览器，浏览器随后会将Cookie的信息保存到某个目录下的文本文件内，下次请求同一网站时就发送该Cookie给服务器。
+
+##爬虫工具（R中）
+R中用于网页抓取的库有RCurl和rvest。             
+爬虫程序的运行逻辑是模拟访问URL地址，然后获取服务器返回的响应文件（HTML源码或JSON格式的字符串）。因此必须明报网页的运行逻辑，然后再一步步利用程序进行实现。
+
+
+# rvest简介
+|       对于结构比较良好的网页，利用rvest.CSS/Xpath选择器和管道符号来处理效率比较高.以下介绍一些常用的函数。
+
+
+```{r}
+library(RCurl)
+library(rvest)
+
+str(read_html)
+# 既可以从网络中获取html文档，也可以从本地种载入html文档
+
+str(html_nodes)
+#利用CSS和Xpath选择器从html文档中提取出节点信息
+
+str(html_text)
+#提取所有满足条件的文本信息
+
+str(html_attrs)
+#提取所有满足条件的属性信息
+
+str(html_table)
+#提取表格信息
+
+str(html_session)
+str(jump_to)
+str(follow_link)
+str(back)
+#以上这些函数都是用于模拟浏览网站的
+```
+
+##一个简单的小例子
+```{r}
+library(rvest)
+#乐高电影信息
+lego_movie <- read_html("http://www.imdb.com/title/tt1490017/")
+str(lego_movie)
+lego_movie #分为网页的开始结尾和主体部分
+str(html_nodes)
+#利用CSS和Xpath选择器从html文档中提取出节点信息
+
+#评分
+rating <- lego_movie %>% 
+    html_nodes("strong span")
+#括号内为节点
+rating
+
+#主演
+cast <- lego_movie %>%
+    html_nodes("#titleCast .itemprop span") %>%
+        html_text()     #提取名字
+cast       
+
+#提取图片
+poster <- lego_movie %>%
+    html_nodes(xpath="//div[@class='poster']/a/img") %>%
+        html_attr("src")   #提取其中的str属性
+```
+
+
+##爬取豆瓣top250信息
+```{r, eval=FALSE}
+library(RCurl)
+library(rvest)
+library(stringr)
+library(plyr)
+library(dplyr)
+
+
+# 获取豆瓣电影首页URL
+DoubanUrl <- 'http://movie.douban.com/top250'
+
+# 从首页中获取所有页面的URL
+PageUrlList <- read_html(DoubanUrl) %>% 
+    html_nodes(xpath = "//div[@class='paginator']/a") %>%   #底下页数信息
+    html_attr("href") %>% 
+    str_c(DoubanUrl, ., sep="") %>% c(DoubanUrl,.)
+
+# 从每个PageUrl中提取出每部电影的链接
+MovieUrl <-  NULL
+for (url in PageUrlList) {
+    item = read_html(url) %>% 
+        html_nodes(xpath="//div[@class='hd']/a/@href") %>%   #各页电影的链接
+        str_extract('https[\\S]+[\\d]{7}')
+    MovieUrl = c(MovieUrl, item)
+}
+
+# 从每个MovieUrl中提取出最终的数据
+## 定义函数getdata，用于获取数据并输出dataframe格式
+GetImdbScore <- function(url){
+    ImdbScore = read_html(url) %>% 
+        html_nodes(xpath = "//span[@itemprop='ratingValue']/text()") %>% 
+        html_text()
+    return(ImdbScore)
+}
+
+getdata <- function(url){
+    Movie = url
+    if(url.exists(url)){
+        MovieHTML = read_html(url, encoding = 'UTF-8')
+        Rank = html_nodes(MovieHTML, xpath = "//span[@class='top250-no']/text()") %>% html_text()
+        MovieName = html_nodes(MovieHTML, xpath = "//span[@property='v:itemreviewed']/text()") %>% html_text()
+        Director = html_nodes(MovieHTML, xpath = "//a[@rel='v:directedBy']/text()") %>% 
+            html_text() %>% paste(collapse = ";")
+        Type = html_nodes(MovieHTML, xpath = "//span[@property='v:genre']/text()") %>% 
+            html_text() %>% paste(collapse = ";")
+        Score = html_nodes(MovieHTML, xpath = "//strong[@property='v:average']/text()") %>% html_text()
+        ImdbUrl = html_nodes(MovieHTML, xpath = "//a[contains(@href,'imdb')]/@href") %>% html_text()
+        ImdbScore = GetImdbScore(ImdbUrl) 
+        Description = html_nodes(MovieHTML, xpath = "//span[@property='v:summary']/text()") %>% 
+            html_text() %>% str_replace("\n[\\s]+", "") %>% paste(collapse = ";")
+        data.frame(Rank, Movie, MovieName, Director, Type, Score, ImdbScore, Description)
+    }
+}
+
+## 抓取数据
+
+Douban250 <- data.frame()
+for (i in 1:length(MovieUrl)) {
+    Douban250 = rbind(Douban250, getdata(MovieUrl[i]))
+    print(paste("Movie",i,sep = "-"))
+    Sys.sleep(round(runif(1,1,3)))
+}
+```
+|       上面代码这里就不跑了。
+
+
+
+```{r}
+# 豆瓣API
+url <- "https://api.douban.com/v2/movie/1292052"
+library(rvest)
+result <- read_html(url)
+result <- html_nodes(result, "p") %>% html_text()
+class(result)
+library(rjson)
+a = rjson::fromJSON(result)
+a
+```
+|       API什么的现在还不懂，以后再慢慢学习。
+
+
