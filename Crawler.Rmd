@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```
 
-本文为本人在学习曾武雄学长(firebear)的presentation时做的笔记。
+本文为本人在学习曾武雄学长(fiebears)的presentation时做的笔记。
 
 #基础知识              
 学习爬虫前所需要的基础知识：
